@@ -1,0 +1,7 @@
+.env
+schedule.csv
+schedule.db
+schedule.json
+logs/
+.venv/
+__pycache__/
