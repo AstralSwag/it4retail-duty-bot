@@ -9,7 +9,7 @@ import logging
 # Загрузка переменных окружения
 load_dotenv()
 
-TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN_TEST')
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 
 if not TELEGRAM_BOT_TOKEN:
     print("TELEGRAM_BOT_TOKEN не найден в файле .env!")
