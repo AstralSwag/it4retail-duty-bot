@@ -66,7 +66,7 @@ def send_welcome(message):
     button_duty = telebot.types.KeyboardButton("Кто дежурит?")
     button_schedule = telebot.types.KeyboardButton("Моё расписание")
     markup.add(button_duty, button_schedule)
-    bot.send_message(message.chat.id, "Привет! Теперь я Матроскин_V2 и умею выводить твоё расписание!!!:", reply_markup=markup)
+    bot.send_message(message.chat.id, "Привет! Теперь я Матроскин_V2.5 и я пересобираюсь в докере после пуша в мастер:", reply_markup=markup)
 
 
 
