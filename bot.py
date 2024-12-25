@@ -1,3 +1,4 @@
+import subprocess
 import telebot
 import sqlite3
 from datetime import datetime, timedelta
@@ -8,7 +9,7 @@ import logging
 # Загрузка переменных окружения
 load_dotenv()
 
-TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN_TEST')
 
 if not TELEGRAM_BOT_TOKEN:
     print("TELEGRAM_BOT_TOKEN не найден в файле .env!")
@@ -68,7 +69,22 @@ def send_welcome(message):
     markup.add(button_duty, button_schedule)
     bot.send_message(message.chat.id, "Привет! Теперь я Матроскин_V2.5 и я пересобираюсь в докере после пуша в мастер:", reply_markup=markup)
 
-
+# Обработка команды /update195 (обновить таблицу расписания)
+@bot.message_handler(commands=['update195'])
+def update_195(message):
+    user_info = f"User: {message.from_user.first_name} (@{message.from_user.username or 'No username'})"
+    logging.info(f"{user_info} sent /update195")
+    try:
+        # Запуск команды python ./main.py
+        result = subprocess.run(['python', './main.py'], capture_output=True, text=True)
+        if result.returncode == 0:
+            bot.send_message(message.chat.id, "Команда выполнена успешно:\n" + result.stdout)
+        else:
+            bot.send_message(message.chat.id, "Ошибка при выполнении команды:\n" + result.stderr)
+        logging.info(f"{user_info} - Command executed with return code {result.returncode}")
+    except Exception as e:
+        bot.send_message(message.chat.id, f"Произошла ошибка: {e}")
+        logging.error(f"{user_info} - Error: {e}")
 
 
 #Кто дежурит?
