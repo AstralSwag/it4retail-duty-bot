@@ -98,6 +98,6 @@ def get_date(rus_date):
         raise ValueError(f"Unknown month abbreviation: {month_cyr}")
 
 
-    year = '2024'
+    year = datetime.now().strftime('%Y')
     return f"{day.zfill(2)}.{month}.{year}"
 
