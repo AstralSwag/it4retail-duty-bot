@@ -5,14 +5,15 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import os
 import logging
+import json
 
 # Загрузка переменных окружения
 load_dotenv()
 
-# Загрузка свежей таблицы
-subprocess.run(['python', './main.py'], capture_output=True, text=True)
 
-TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN_TEST')
+HEAD_MAPPING = json.loads(os.getenv('HEAD_MAPPING'))
 
 if not TELEGRAM_BOT_TOKEN:
     print("TELEGRAM_BOT_TOKEN не найден в файле .env!")
@@ -68,7 +69,7 @@ def send_welcome(message):
     logging.info(f"{user_info} sent /start")
     markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
     button_duty = telebot.types.KeyboardButton("Кто дежурит?")
-    button_schedule = telebot.types.KeyboardButton("Моё расписание")
+    button_schedule = telebot.types.KeyboardButton("Расписание")
     markup.add(button_duty, button_schedule)
     bot.send_message(message.chat.id, "Матроскин v2.6. Теперь я обновляю таблицу при запуске и не падаю после нового года", reply_markup=markup)
 
@@ -156,11 +157,41 @@ def who_is_on_duty(message):
 
 
 
-#Моё расписание
-@bot.message_handler(func=lambda message: message.text == "Моё расписание")
+
+
+# Функция для обработки команды "Расписание"
+@bot.message_handler(func=lambda message: message.text == "Расписание")
 def my_schedule_handler(message):
     user_info = f"User: {message.from_user.first_name} (@{message.from_user.username or 'No username'})"
-    logging.info(f"{user_info} requested 'Моё расписание'")
+    logging.info(f"{user_info} requested 'Расписание'")
+    
+    # Предлагаем выбрать пользователя
+    markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    for user in HEAD_MAPPING.keys():
+        if user not in ["Дата", "Интервал"]:  # Исключаем служебные поля
+            markup.add(telebot.types.KeyboardButton(user))
+    bot.send_message(message.chat.id, "Выберите пользователя:", reply_markup=markup)
+    
+    # Сохраняем команду в контексте
+    user_context[message.chat.id] = {'command': 'select_user'}
+
+# Функция для обработки выбора пользователя
+@bot.message_handler(func=lambda message: message.chat.id in user_context and user_context[message.chat.id]['command'] == 'select_user')
+def handle_user_selection(message):
+    user_info = f"User: {message.from_user.first_name} (@{message.from_user.username or 'No username'})"
+    selected_user = message.text.strip()
+    
+    # Проверяем, что выбранный пользователь есть в словаре HEAD_MAPPING
+    if selected_user not in HEAD_MAPPING:
+        bot.send_message(message.chat.id, "Пользователь не найден. Пожалуйста, выберите из списка.")
+        logging.info(f"{user_info} - Invalid user selected: {selected_user}")
+        return
+    
+    # Сохраняем выбранного пользователя в контексте
+    user_context[message.chat.id]['selected_user'] = selected_user
+    user_context[message.chat.id]['command'] = 'my_schedule'  # Переключаем на следующую команду
+    
+    # Предлагаем выбрать период для расписания
     markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
     markup.add(
         telebot.types.KeyboardButton("На завтра"),
@@ -168,9 +199,9 @@ def my_schedule_handler(message):
         telebot.types.KeyboardButton("7️⃣"),
         telebot.types.KeyboardButton("Покажи весь месяц")
     )
-    bot.send_message(message.chat.id, "На сколько дней вперед вывести твоё расписание? 🗓", reply_markup=markup)
-    user_context[message.chat.id] = {'command': 'my_schedule'}
+    bot.send_message(message.chat.id, f"Вы выбрали {selected_user}. На сколько дней вперед вывести расписание? 🗓", reply_markup=markup)
 
+# Функция для обработки ввода количества дней и вывода расписания
 @bot.message_handler(func=lambda message: message.chat.id in user_context and user_context[message.chat.id]['command'] == 'my_schedule')
 def handle_schedule_days_input(message):
     user_info = f"User: {message.from_user.first_name} (@{message.from_user.username or 'No username'})"
@@ -187,11 +218,18 @@ def handle_schedule_days_input(message):
         else:
             days = int(user_input)
 
-        username = f"@{message.from_user.username}" if message.from_user.username else None
+        # Получаем выбранного пользователя из контекста
+        selected_user = user_context[message.chat.id].get('selected_user')
+        if not selected_user:
+            bot.send_message(message.chat.id, "Пользователь не выбран. Пожалуйста, начните с начала.")
+            logging.info(f"{user_info} - No user selected.")
+            return
 
+        # Получаем Telegram-username из словаря HEAD_MAPPING
+        username = HEAD_MAPPING.get(selected_user)
         if not username:
-            bot.send_message(message.chat.id, "У вас нет никнейма в Telegram. Расписание не может быть найдено.")
-            logging.info(f"{user_info} - No username provided, schedule lookup failed.")
+            bot.send_message(message.chat.id, "Указанный пользователь не найден в расписании.")
+            logging.info(f"{user_info} - No username found for {selected_user}.")
             return
 
         # Подключение к базе данных
@@ -206,13 +244,20 @@ def handle_schedule_days_input(message):
 
         # Рассчитываем конечную дату вывода расписания
         end_date = today + timedelta(days=days - 1)
-        if end_date > last_day:
-            end_date = last_day
-            bot.send_message(message.chat.id, "я пока умею работать только в пределах текущего месяца, сорри")
 
-        # Форматируем даты для SQL
-        start_date_str = today.strftime('%d.%m.%Y')
-        end_date_str = end_date.strftime('%d.%m.%Y')
+        if (days != 31):
+            
+            if end_date > last_day:
+                end_date = last_day
+                bot.send_message(message.chat.id, "Я пока умею работать только в пределах текущего месяца, сорри")
+
+            # Форматируем даты для SQL
+            start_date_str = today.strftime('%d.%m.%Y')
+            end_date_str = end_date.strftime('%d.%m.%Y')
+        else:
+            start_date_str = today.replace(day=1).strftime('%d.%m.%Y')
+            end_date_str = (today.replace(day=1) + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+            end_date_str = end_date_str.strftime('%d.%m.%Y')
 
         # Запрос для получения расписания пользователя
         query = f"""
@@ -224,7 +269,7 @@ def handle_schedule_days_input(message):
         rows = cursor.fetchall()
 
         if not rows:
-            bot.send_message(message.chat.id, "Тебя нет в расписании, старина")
+            bot.send_message(message.chat.id, f"Пользователь {selected_user} не найден в расписании.")
             logging.info(f"{user_info} - No schedule found for {username}")
         else:
             schedule = []
@@ -245,13 +290,13 @@ def handle_schedule_days_input(message):
                 bot.send_message(message.chat.id, table, parse_mode="MarkdownV2")
                 logging.info(f"{user_info} - Schedule sent for {username}")
             else:
-                bot.send_message(message.chat.id, "Тебя нет в расписании, старина")
+                bot.send_message(message.chat.id, f"Пользователь {selected_user} не найден в расписании.")
                 logging.info(f"{user_info} - No schedule found after filtering for {username}")
 
         # Возврат кнопок по умолчанию
         markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
         button_duty = telebot.types.KeyboardButton("Кто дежурит?")
-        button_schedule = telebot.types.KeyboardButton("Моё расписание")
+        button_schedule = telebot.types.KeyboardButton("Расписание")
         markup.add(button_duty, button_schedule)
         bot.send_message(message.chat.id, "____________", reply_markup=markup)
 
@@ -265,7 +310,6 @@ def handle_schedule_days_input(message):
         if 'conn' in locals():
             conn.close()
         user_context.pop(message.chat.id, None)
-
 
 # Функция для проверки, входит ли текущее время в заданный диапазон
 def is_time_in_range(time_range, current_time):
