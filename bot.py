@@ -9,6 +9,8 @@ import json
 
 # Загрузка переменных окружения
 load_dotenv()
+# Загрузка свежей таблицы
+subprocess.run(['python', './main.py'], capture_output=True, text=True)
 
 
 
