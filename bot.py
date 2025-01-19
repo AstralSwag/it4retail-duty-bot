@@ -12,8 +12,9 @@ load_dotenv()
 
 
 
-TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN_TEST')
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 HEAD_MAPPING = json.loads(os.getenv('HEAD_MAPPING'))
+reversed_dict = {v: k for k, v in HEAD_MAPPING.items()} # Для поиска ключей
 
 if not TELEGRAM_BOT_TOKEN:
     print("TELEGRAM_BOT_TOKEN не найден в файле .env!")
@@ -71,7 +72,7 @@ def send_welcome(message):
     button_duty = telebot.types.KeyboardButton("Кто дежурит?")
     button_schedule = telebot.types.KeyboardButton("Расписание")
     markup.add(button_duty, button_schedule)
-    bot.send_message(message.chat.id, "Матроскин v2.6. Теперь я обновляю таблицу при запуске и не падаю после нового года", reply_markup=markup)
+    bot.send_message(message.chat.id, "Матроскин v2.7. Теперь я показываю расписание любого сотрудника из таблицы и умею в справку (/help)", reply_markup=markup)
 
 # Обработка команды /update195 (обновить таблицу расписания)
 @bot.message_handler(commands=['update195'])
@@ -164,12 +165,19 @@ def who_is_on_duty(message):
 def my_schedule_handler(message):
     user_info = f"User: {message.from_user.first_name} (@{message.from_user.username or 'No username'})"
     logging.info(f"{user_info} requested 'Расписание'")
+    user_info_id = f"@{message.from_user.username or 'No username'}"
     
+    user_info_name = reversed_dict.get(user_info_id)
     # Предлагаем выбрать пользователя
-    markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    
+    markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True, row_width=2)
+    buttons = []
+    buttons.append(telebot.types.KeyboardButton("Моё расписание")) # Добавили себя
     for user in HEAD_MAPPING.keys():
-        if user not in ["Дата", "Интервал"]:  # Исключаем служебные поля
-            markup.add(telebot.types.KeyboardButton(user))
+        if user not in ["Дата", "Интервал", user_info_name] :  # Исключаем служебные поля и себя
+            buttons.append(telebot.types.KeyboardButton(user))
+    
+    markup.add(*buttons)
     bot.send_message(message.chat.id, "Выберите пользователя:", reply_markup=markup)
     
     # Сохраняем команду в контексте
@@ -179,7 +187,13 @@ def my_schedule_handler(message):
 @bot.message_handler(func=lambda message: message.chat.id in user_context and user_context[message.chat.id]['command'] == 'select_user')
 def handle_user_selection(message):
     user_info = f"User: {message.from_user.first_name} (@{message.from_user.username or 'No username'})"
+    user_info_id = f"@{message.from_user.username or 'No username'}"
+    user_info_name = reversed_dict.get(user_info_id)
+
     selected_user = message.text.strip()
+    
+    if message.text.strip() == "Моё расписание":
+        selected_user = user_info_name
     
     # Проверяем, что выбранный пользователь есть в словаре HEAD_MAPPING
     if selected_user not in HEAD_MAPPING:
@@ -310,6 +324,19 @@ def handle_schedule_days_input(message):
         if 'conn' in locals():
             conn.close()
         user_context.pop(message.chat.id, None)
+
+# Обработчик команды /help
+@bot.message_handler(commands=['help'])
+def send_help(message):
+    help_text = """
+Доступные команды:
+/start - Начать работу с ботом
+/help - Показать список команд
+/update195 - Обновить таблицу расписания
+Кто дежурит? - Узнать, кто дежурит сегодня
+Расписание - Посмотреть своё расписание
+    """
+    bot.send_message(message.chat.id, help_text)
 
 # Функция для проверки, входит ли текущее время в заданный диапазон
 def is_time_in_range(time_range, current_time):
