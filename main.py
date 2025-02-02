@@ -1,12 +1,26 @@
-from dotenv import load_dotenv
-import os
+import json
 from schedule_to_sql import download_and_process_schedule
 
-# Загружаем переменные окружения из файла .env
-load_dotenv('/app/.env')
+CONFIG_PATH = '/app/config/config.json'  # Путь к конфигурационному файлу
 
-# Получаем ссылку на CSV файл из переменной окружения
-csv_url = os.getenv('CSV_URL')
+def load_config():
+    """Загружает конфигурацию из JSON-файла"""
+    try:
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f"Ошибка загрузки конфига: {e}")
+        exit()
 
-# Вызываем функцию, чтобы скачать и обработать CSV
+# Загружаем конфигурацию
+config = load_config()
+
+# Получаем ссылку на CSV файл из конфига
+csv_url = config.get('CSV_URL')
+
+if not csv_url:
+    print("CSV_URL не найден в конфигурационном файле!")
+    exit()
+
+# Вызываем функцию для обработки расписания
 download_and_process_schedule(csv_url)

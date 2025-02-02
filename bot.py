@@ -9,17 +9,29 @@ import json
 from flask import Flask, jsonify
 import threading
 
-# Загрузка переменных окружения
-load_dotenv('/app/.env')
+CONFIG_PATH = '/app/config/config.json'  # Путь к конфигурационному файлу
+
+def load_config():
+    """Загружает конфигурацию из JSON-файла"""
+    try:
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f"Ошибка загрузки конфига: {e}")
+        exit()
+
+# Загрузка конфигурации
+config = load_config()
+TELEGRAM_BOT_TOKEN = config.get('TELEGRAM_BOT_TOKEN')
+HEAD_MAPPING = config.get('HEAD_MAPPING', {})
+CSV_URL = config.get('CSV_URL', '')
+reversed_dict = {v: k for k, v in HEAD_MAPPING.items()}
+
 # Загрузка свежей таблицы
 subprocess.run(['python', './main.py'], capture_output=True, text=True)
 
-TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-HEAD_MAPPING = json.loads(os.getenv('HEAD_MAPPING'))
-reversed_dict = {v: k for k, v in HEAD_MAPPING.items()} # Для поиска ключей
-
 if not TELEGRAM_BOT_TOKEN:
-    print("TELEGRAM_BOT_TOKEN не найден в файле .env!")
+    print("TELEGRAM_BOT_TOKEN не найден в конфиге!")
     exit()
 
 # Инициализация логирования
@@ -82,8 +94,16 @@ def update_195(message):
     user_info = f"User: {message.from_user.first_name} (@{message.from_user.username or 'No username'})"
     logging.info(f"{user_info} sent /update195")
     try:
-        # Запуск команды python ./main.py
-        result = subprocess.run(['python', './main.py'], capture_output=True, text=True)
+        # Убедимся, что конфиг актуален
+        config = load_config()
+        
+        # Простой вызов без передачи переменных окружения
+        result = subprocess.run(
+            ['python', './main.py'], 
+            capture_output=True,
+            text=True
+        )
+        
         if result.returncode == 0:
             bot.send_message(message.chat.id, "Команда выполнена успешно:\n" + result.stdout)
         else:
@@ -329,21 +349,29 @@ def handle_schedule_days_input(message):
 
 # Изменить ссылку на таблицу
 @bot.message_handler(commands=["set_table"])
-def set_variable(message):
-    new_value = message.text.split(maxsplit=1)[1] if len(message.text.split()) > 1 else "default"
+def set_table(message):
+    user_info = f"User: {message.from_user.first_name} (@{message.from_user.username or 'No username'})"
+    logging.info(f"{user_info} sent /set_table")
     
-    # Обновляем .env файл
-    with open(".env", "r", encoding="utf-8") as f:
-        lines = f.readlines()
+    if len(message.text.split()) < 2:
+        bot.reply_to(message, "Укажите новую ссылку на таблицу.")
+        return
     
-    with open(".env", "w", encoding="utf-8") as f:
-        for line in lines:
-            if line.startswith("CSV_URL="):
-                f.write(f"CSV_URL={new_value}\n")
-            else:
-                f.write(line)
+    new_url = message.text.split(maxsplit=1)[1]
     
-    bot.reply_to(message, f"CSV_URL изменена на: {new_value}")
+    try:
+        config = load_config()
+        config['CSV_URL'] = new_url
+        
+        with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
+            json.dump(config, f, ensure_ascii=False, indent=4)
+            
+        bot.reply_to(message, f"✅ Ссылка на таблицу обновлена:\n{new_url}")
+        logging.info(f"{user_info} updated CSV_URL to {new_url}")
+    except Exception as e:
+        bot.reply_to(message, f"❌ Ошибка при сохранении: {e}")
+        logging.error(f"{user_info} - Error updating CSV_URL: {e}")
+
 
 # Обработчик команды /help
 @bot.message_handler(commands=['help'])
