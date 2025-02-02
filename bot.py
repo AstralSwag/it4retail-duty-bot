@@ -6,13 +6,13 @@ from dotenv import load_dotenv
 import os
 import logging
 import json
+from flask import Flask, jsonify
+import threading
 
 # Загрузка переменных окружения
 load_dotenv()
 # Загрузка свежей таблицы
 subprocess.run(['python', './main.py'], capture_output=True, text=True)
-
-
 
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 HEAD_MAPPING = json.loads(os.getenv('HEAD_MAPPING'))
@@ -74,7 +74,7 @@ def send_welcome(message):
     button_duty = telebot.types.KeyboardButton("Кто дежурит?")
     button_schedule = telebot.types.KeyboardButton("Расписание")
     markup.add(button_duty, button_schedule)
-    bot.send_message(message.chat.id, "Матроскин v2.7. Теперь я показываю расписание любого сотрудника из таблицы и умею в справку (/help)", reply_markup=markup)
+    bot.send_message(message.chat.id, "Матроскин v2.8 Теперь у меня есть API для получения ссылки на дежурного, а также команда для замены ссылки на таблицу", reply_markup=markup)
 
 # Обработка команды /update195 (обновить таблицу расписания)
 @bot.message_handler(commands=['update195'])
@@ -327,6 +327,24 @@ def handle_schedule_days_input(message):
             conn.close()
         user_context.pop(message.chat.id, None)
 
+# Изменить ссылку на таблицу
+@bot.message_handler(commands=["set_table"])
+def set_variable(message):
+    new_value = message.text.split(maxsplit=1)[1] if len(message.text.split()) > 1 else "default"
+    
+    # Обновляем .env файл
+    with open(".env", "r", encoding="utf-8") as f:
+        lines = f.readlines()
+    
+    with open(".env", "w", encoding="utf-8") as f:
+        for line in lines:
+            if line.startswith("CSV_URL="):
+                f.write(f"CSV_URL={new_value}\n")
+            else:
+                f.write(line)
+    
+    bot.reply_to(message, f"CSV_URL изменена на: {new_value}")
+
 # Обработчик команды /help
 @bot.message_handler(commands=['help'])
 def send_help(message):
@@ -334,6 +352,7 @@ def send_help(message):
 Доступные команды:
 /start - Начать работу с ботом
 /help - Показать список команд
+/set_table <table_link> - Меняет ссылку на таблицу расписания
 /update195 - Обновить таблицу расписания
 Кто дежурит? - Узнать, кто дежурит сегодня
 Расписание - Посмотреть своё расписание
@@ -355,6 +374,58 @@ def is_time_in_range(time_range, current_time):
         return False
     
 
-# Запуск бота
-logging.info("Бот запущен...")
-bot.infinity_polling()
+
+
+
+# Создаем Flask-приложение
+app = Flask(__name__)
+
+@app.route('/get_hero', methods=['GET'])
+def get_hero():
+    try:
+        # Подключение к базе данных SQLite
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row  # Позволяет доступ к строкам как к словарям
+        cursor = conn.cursor()
+        # Получение текущей даты и времени
+        now = datetime.now()
+        current_date = now.strftime('%d.%m.%Y')
+        current_time = now.time()
+        # Запрос для получения дежурных на текущую дату
+        query = """
+        SELECT * FROM schedule
+        WHERE Date = ?
+        """
+        cursor.execute(query, (current_date,))
+        rows = cursor.fetchall()
+        # Поиск колонок со значением "duty" для текущего временного интервала
+        on_duty = []
+        for row in rows:
+            time_range = row["Time"]
+            if is_time_in_range(time_range, current_time):
+                for col_name in row.keys():  # Доступ к именам колонок
+                    value = row[col_name]  # Доступ к значениям колонок
+                    if value == "duty":
+                        on_duty.append(col_name)
+
+
+        return jsonify(on_duty)
+
+    except Exception as e:
+        print(f"Ошибка: {e}")
+    finally:
+        conn.close()
+
+
+# Запуск Flask в отдельном потоке
+def run_flask():
+    app.run(host='0.0.0.0', port=22123)
+
+# Запуск Flask и бота
+if __name__ == '__main__':
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.start()
+
+    # Запуск бота
+    logging.info("Бот запущен...")
+    bot.infinity_polling()
