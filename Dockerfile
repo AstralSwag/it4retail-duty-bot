@@ -8,6 +8,9 @@ RUN apt-get update && apt-get install -y tzdata && \
 
 WORKDIR /app
 
+# Создание директории для конфигов
+RUN mkdir -p /app/config && chmod 777 /app/config
+
 COPY . /app
 
 RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
