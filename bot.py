@@ -10,7 +10,7 @@ from flask import Flask, jsonify
 import threading
 
 # Загрузка переменных окружения
-load_dotenv()
+load_dotenv('/app/.env')
 # Загрузка свежей таблицы
 subprocess.run(['python', './main.py'], capture_output=True, text=True)
 

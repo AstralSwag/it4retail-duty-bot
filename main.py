@@ -3,7 +3,7 @@ import os
 from schedule_to_sql import download_and_process_schedule
 
 # Загружаем переменные окружения из файла .env
-load_dotenv()
+load_dotenv('/app/.env')
 
 # Получаем ссылку на CSV файл из переменной окружения
 csv_url = os.getenv('CSV_URL')
