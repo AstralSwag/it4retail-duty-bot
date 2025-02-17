@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  it4bot:
+    image: astralswag/it4retail-duty-bot
+    container_name: it4bot
+    restart: always
+    env_file:
+      - /home/das/.docker/it4bot/.env
+    volumes:
+      - /var/log/docker/it4bot:/app/logs
+      - /home/das/.docker/it4bot/config:/app/config
+    ports:
+      - "22123:22123"
+    networks:
+      - n8n_mynetwork
+
+networks:
+  n8n_mynetwork:
+    external: true

@@ -437,10 +437,11 @@ def get_hero():
                         on_duty.append(col_name)
 
 
-        return jsonify(on_duty)
+        return jsonify({"json": on_duty})
 
     except Exception as e:
         print(f"Ошибка: {e}")
+        return jsonify({"error": str(e)}), 500  # Возвращаем ошибку, если что-то пошло не так
     finally:
         conn.close()
 
