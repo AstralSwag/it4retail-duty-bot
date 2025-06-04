@@ -6,13 +6,13 @@ import dotenv
 from dotenv import load_dotenv
 import os
 import json
+import re
 
 load_dotenv()
 head_mapping = json.loads(os.getenv('HEAD_MAPPING'))
 
 
 def download_and_process_schedule(csv_url):
-
     if not csv_url:
         print("URL не найден в .env файле!")
         exit()
@@ -49,19 +49,28 @@ def download_and_process_schedule(csv_url):
     # Преобразуем даты в формат YYYY-MM-DD
     df_filtered['Дата'] = df_filtered['Дата'].apply(get_date)
 
-    status_mapping = {
-        'р': 'work',
-        'о': 'vacation',
-        '+': 'duty',
-        'в': 'dayoff'
-    }
+    def get_status(value):
+        if pd.isna(value):
+            return None
+        value = str(value).strip()
+        
+        # Проверяем, содержит ли значение время работы (формат ЧЧ:ММ-ЧЧ:ММ)
+        if re.search(r'\d{1,2}:\d{2}-\d{1,2}:\d{2}', value):
+            return 'duty'
+        elif value == 'р':
+            return 'work'
+        elif value == 'о':
+            return 'vacation'
+        elif value == 'в':
+            return 'dayoff'
+        return None
 
     # Переименовываем столбцы на английский
     df_filtered.rename(columns=head_mapping, inplace=True)
 
-    # Применяем замену статусов
+    # Применяем функцию определения статуса к каждой колонке сотрудников
     for col in df_filtered.columns[2:]:  # Начинаем с третьей колонки, где начинаются имена сотрудников
-        df_filtered[col] = df_filtered[col].replace(status_mapping)  # Заменяем статусы с помощью replace
+        df_filtered[col] = df_filtered[col].apply(get_status)
 
     # Создаём базу данных SQLite и записываем таблицу
     db_name = './schedule.db'
@@ -96,7 +105,6 @@ def get_date(rus_date):
     month = month_mapping.get(month_cyr)
     if not month:
         raise ValueError(f"Unknown month abbreviation: {month_cyr}")
-
 
     year = datetime.now().strftime('%Y')
     return f"{day.zfill(2)}.{month}.{year}"

@@ -282,7 +282,6 @@ def handle_schedule_days_input(message):
         end_date = today + timedelta(days=days - 1)
 
         if (days != 31):
-            
             if end_date > last_day:
                 end_date = last_day
                 bot.send_message(message.chat.id, "Я пока умею работать только в пределах текущего месяца, сорри")
@@ -313,13 +312,16 @@ def handle_schedule_days_input(message):
                 status = row[username]
                 if status is None:
                     continue
-                formatted_status = STATUS_MAPPING.get(status, status)
                 weekday = get_weekday(row['Date'])
                 today_marker = " 👈 Сегодня" if row['Date'] == today.strftime('%d.%m.%Y') else ""
+                
+                # Форматируем статус в зависимости от его типа
                 if status == 'duty':
-                    schedule.append(f"*{escape_markdown(row['Date'])}* \\({escape_markdown(weekday)}\\) \\- {escape_markdown(formatted_status)} {escape_markdown(row['Time'])}{escape_markdown(today_marker)}\n")
+                    formatted_status = f"Дежурный 🚨 {row['Time']}"
                 else:
-                    schedule.append(f"*{escape_markdown(row['Date'])}* \\({escape_markdown(weekday)}\\) \\- {escape_markdown(formatted_status)}{escape_markdown(today_marker)}\n")
+                    formatted_status = STATUS_MAPPING.get(status, status)
+                
+                schedule.append(f"*{escape_markdown(row['Date'])}* \\({escape_markdown(weekday)}\\) \\- {escape_markdown(formatted_status)}{escape_markdown(today_marker)}\n")
 
             if schedule:
                 table = "\n".join(schedule)
