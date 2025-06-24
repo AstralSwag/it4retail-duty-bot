@@ -8,6 +8,7 @@ import logging
 import json
 from flask import Flask, jsonify
 import threading
+import re
 
 CONFIG_PATH = '/app/config/config.json'  # Путь к конфигурационному файлу
 
@@ -60,7 +61,6 @@ STATUS_MAPPING = {
     'work': 'Рабочий день 👨🏻‍💻',
     'dayoff': 'Выходной 🌴',
     'vacation': 'Отпуск ✈️',
-    'duty': 'Дежурный 🚨'
 }
 
 # Экранирование для MarkdownV2
@@ -153,11 +153,13 @@ def who_is_on_duty(message):
         # Поиск колонок со значением "duty" для текущего временного интервала
         on_duty = []
         for row in rows:
-            time_range = row["Time"]
-            if is_time_in_range(time_range, current_time):
-                for col_name in row.keys():  # Доступ к именам колонок
-                    value = row[col_name]  # Доступ к значениям колонок
-                    if value == "duty":
+            for col_name in row.keys():
+                if col_name in ['Date', 'Time']:
+                    continue
+                
+                status = row[col_name]
+                if status and re.match(r'^\d{1,2}:\d{2}-\d{1,2}:\d{2}$', str(status)):
+                    if is_time_in_range(status, current_time):
                         on_duty.append(col_name)
 
         # Лог колонок дежурных для отладки
@@ -431,11 +433,13 @@ def get_hero():
         # Поиск колонок со значением "duty" для текущего временного интервала
         on_duty = []
         for row in rows:
-            time_range = row["Time"]
-            if is_time_in_range(time_range, current_time):
-                for col_name in row.keys():  # Доступ к именам колонок
-                    value = row[col_name]  # Доступ к значениям колонок
-                    if value == "duty":
+            for col_name in row.keys():  # Доступ к именам колонок
+                if col_name in ['Date', 'Time']:
+                    continue
+
+                value = row[col_name]  # Доступ к значениям колонок
+                if value and re.match(r'^\d{1,2}:\d{2}-\d{1,2}:\d{2}$', str(value)):
+                    if is_time_in_range(value, current_time):
                         on_duty.append(col_name)
 
 

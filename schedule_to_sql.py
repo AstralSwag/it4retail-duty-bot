@@ -55,8 +55,9 @@ def download_and_process_schedule(csv_url):
         value = str(value).strip()
         
         # Проверяем, содержит ли значение время работы (формат ЧЧ:ММ-ЧЧ:ММ)
-        if re.search(r'\d{1,2}:\d{2}-\d{1,2}:\d{2}', value):
-            return 'duty'
+        time_match = re.search(r'(\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2})', value)
+        if time_match:
+            return time_match.group(1).replace(" ", "") # Возвращаем найденное время
         elif value == 'р':
             return 'work'
         elif value == 'о':
