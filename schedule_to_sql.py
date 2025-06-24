@@ -32,7 +32,7 @@ def download_and_process_schedule(csv_url):
 
     # Загружаем CSV-файл
     file_path = './schedule.csv'
-    df = pd.read_csv(file_path)
+    df = pd.read_csv(file_path, header=1)
 
     # Обрезаем колонки после последней, которая не является пустой
     columns_to_keep = [col for col in df.columns if 'Unnamed' not in col]
